@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-service
+  labels:
+    app: elasticsearch
+spec:
+  ports:
+    - port: 9200
+      name: http
+    - port: 9300
+      name: transport
+  selector:
+    app: elasticsearch
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+spec:
+  serviceName: elasticsearch-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:7.17.9
+          ports:
+            - containerPort: 9200
+              name: http
+            - containerPort: 9300
+              name: transport
+          env:
+            - name: discovery.type
+              value: single-node
+            - name: ES_JAVA_OPTS
+              value: "-Xms512m -Xmx512m -Des.timer.force.nanos=true -Dcluster.publish.info_timeout=60s"
+            - name: xpack.security.enabled
+              value: "false"
+            - name: xpack.monitoring.enabled
+              value: "false"
+            - name: cluster.name
+              value: "weather-station-cluster"
+            - name: bootstrap.memory_lock
+              value: "false"
+            - name: thread_pool.write.queue_size
+              value: "1000"
+            - name: thread_pool.search.queue_size
+              value: "1000"
+          resources:
+            limits:
+              memory: "1Gi"  # Increased from 512Mi
+              cpu: "1"
+            requests:
+              memory: "1Gi"  # Increased from 384Mi
+              cpu: "500m"    # Increased from 250m
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/elasticsearch/data
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: 9200
+            initialDelaySeconds: 180  # Increased from 90
+            periodSeconds: 30         # Increased from 20
+            failureThreshold: 3       # Reduced from 5
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: 9200
+            initialDelaySeconds: 240
+            periodSeconds: 45
+            failureThreshold: 3
+            timeoutSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: elasticsearch-pvc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: elasticsearch-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

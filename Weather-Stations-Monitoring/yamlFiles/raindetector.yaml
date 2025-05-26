@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rain-detector
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: rain-detector
+  template:
+    metadata:
+      labels:
+        app: rain-detector
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+        - name: rain-detector
+          image: kmmas/rain-detector:1.3
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-service:9092"
+            - name: APPLICATION_ID
+              value: "rain-detector-v1-$(POD_NAME)"
+            - name: SOURCE_TOPIC
+              value: "weather-data"
+            - name: SINK_TOPIC
+              value: "rain-alerts"
+            - name: PROCESSING_GUARANTEE
+              value: "exactly_once_v2"
+            - name: LOG_LEVEL
+              value: "DEBUG"
+            - name: KAFKA_STREAMS_RACK_AWARE_ASSIGNMENT_STRATEGY
+              value: ""
+            - name: KAFKA_STREAMS_CONSUMER_MAX_POLL_INTERVAL_MS
+              value: "300000"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /q/health/live
+              port: 8080
+            initialDelaySeconds: 180
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /q/health/ready
+              port: 8080
+            initialDelaySeconds: 120
+            periodSeconds: 20
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 30"]
+          ports:
+            - containerPort: 8080
+              name: metrics
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rain-detector-service
+  labels:
+    app: rain-detector
+spec:
+  selector:
+    app: rain-detector
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  type: ClusterIP

@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: central-station
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app: central-station
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: central-station
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: central-station
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: central-station
+    spec:
+      containers:
+        - name: central-station
+          image: kmmas/central-station:1.7
+          ports:
+            - containerPort: 8080
+          env:
+            - name: BITCASK_DATA_PATH
+              value: "/data/bitcask"
+            - name: PARQUET_DATA_PATH
+              value: "/data/parquet"
+            - name: ELASTICSEARCH_HOST
+              value: "elasticsearch-service"
+            - name: ELASTICSEARCH_PORT
+              value: "9200"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-service:9092"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:+FlightRecorder -XX:StartFlightRecording=filename=/data/central-station.jfr,dumponexit=true,settings=profile,duration=1m"
+            - name: JFR_DUMP_PATH
+              value: "/data"
+          volumeMounts:
+            - name: data-volume
+              mountPath: /data
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: central-station-pvc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: central-station-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

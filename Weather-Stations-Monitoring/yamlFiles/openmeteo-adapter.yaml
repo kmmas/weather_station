@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: openmeteo-adapter
+spec:
+  type: ClusterIP  # Explicitly set service type
+  ports:
+    - port: 8080
+      targetPort: 8080  # Add targetPort to match container
+      name: http
+  selector:
+    app: openmeteo-adapter
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openmeteo-adapter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openmeteo-adapter
+  strategy:
+    type: Recreate  # Add deployment strategy
+  template:
+    metadata:
+      labels:
+        app: openmeteo-adapter
+    spec:
+      containers:
+        - name: openmeteo-adapter
+          image: kmmas/openmeteo-adapter:1.0
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-service:9092"
+            - name: LATITUDE
+              value: "52.52"
+            - name: LONGITUDE
+              value: "13.41"
+            - name: POLL_INTERVAL_MINUTES
+              value: "60"
+            # Recommended additions:
+            - name: JAVA_OPTS
+              value: "-Xms256m -Xmx512m"  # Memory limits
+            - name: VIRTUAL_STATION_ID
+              value: "1000"  # From your code
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:  # Add resource limits
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+            requests:
+              cpu: "200m"
+              memory: "256Mi"

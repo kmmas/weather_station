@@ -1,0 +1,92 @@
+(((((((((((((((((start k8s)))))))))))))
+minikube start
+((((((((((((((((((((((run kibana )))))))))))))))))))))))))))))
+# Get the Kibana pod name
+kubectl get pods -l app=kibana
+
+# Port-forward to local machine
+kubectl port-forward svc/kibana-service 5601:5601        			((((((((imp)))))))
+
+((((((((((((((((((((((run server for view bitcask )))))))))))))))))))))))))))))
+
+# Port-forward the service
+kubectl port-forward svc/central-station 8080:8080 &                       ((((((((imp)))))))
+
+# Fetch all data
+curl http://localhost:8080/view
+
+(((((((((((((((((((((((((delete yaml ))))))))))))))))))))))))0
+kubectl delete -f name.yaml
+
+(((((((((((((((((((apply yaml )))))))))))))))))))))))
+
+kubectl apply -f name.yaml
+((((((((((( see run pods ))))))))))))))))))))))
+kubectl get pods -w
+
+(((((((((((((((((((get logs )))))))))))))))))))))))))))
+
+kubectl logs -f pod
+
+(((((((((((((((((((make docker )))))))))))))0
+
+docker build -t kmmas/central-station:1.0 .
+docker push kmmas/central-station:1.0
+
+(((((((((((((((((((get bitcask data)))))))))))))))
+# Get into the Central Station pod
+kubectl exec -it $(kubectl get pods -l app=central-station -o jsonpath='{.items[0].metadata.name}') -- sh
+
+# Navigate to Bitcask storage
+cd $BITCASK_DATA_PATH
+ls -lh  # List files (segment-*.data)
+
+# View raw keys (human-readable if stored as text)
+strings segment-0.data | less
+
+(((or)))
+
+
+# Port-forward the service
+kubectl port-forward svc/central-station 8080:8080 &                                       
+
+# Fetch all data
+curl http://localhost:8080/view
+# Or query specific station
+curl http://localhost:8080/view?key=station-1
+(((((((((or))))))))))))))
+
+kubectl exec -it central-station-67c7f7bcbf-hh9h6 -- sh -c "ls -R /data/bitcask | grep -E '^/|\.data$|\.hint$'"
+
+(((((((((((((((((((get parquet data)))))))))))))))
+
+kubectl exec -it central-station-67c7f7bcbf-hh9h6 -- sh -c "ls -R /data/parquet | grep -E '^/|\.parquet$'"
+
+(((((((((((((((((((((((((((((command to test "bitcask_client.sh" ))))))))))))))))))))))))
+
+./bitcask_client.sh.sh --view-all
+
+
+./bitcask_client.sh --view --key=station-1
+
+./bitcask_client.sh --perf --clients=100
+
+(((((((((((((((((delete  elastic data))))))))))))))))
+
+devtools in kibana run (DELETE /*)
+(((((((((((((((((delete  bitcask/parquet data))))))))))))))))
+
+kubectl exec central-station-pod -- sh -c "rm -rf /data/*"
+
+((((((((((((((((run record ))))))))))))))))
+kubectl exec central-station-67c7f7bcbf-hh9h6 -- jcmd 1 JFR.start duration=600s filename=/data/forced-recording.jfr settings=profile
+(((((((((copy jfr file)))))))
+kubectl cp central-station-67c7f7bcbf-hh9h6:/data/forced-recording.jfr ./forced-recording.jfr
+((((((((((((check for jfr record running ))))))))
+kubectl exec <pod> -- jcmd 1 JFR.check
+((((((((((((stop jfr record running ))))))))
+kubectl exec <pod> -- jcmd 1 JFR.stop name=<recording-name>
+
+
+((((((run kafka powershell ))))))))))))))
+kubectl exec kafka-84945979c8-r7fxp  --   /opt/bitnami/kafka/bin/kafka-console-consumer.sh   --bootstrap-server localhost:9092   --topic weather-data   --from-beginning
